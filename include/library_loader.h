@@ -6,51 +6,52 @@
 
 #pragma once
 
-#include <cstdio>
-#include <memory>
-#include <vector>
-#include <sstream>
-
 #include <dlfcn.h>
 
+#include <cstdio>
+#include <memory>
+#include <sstream>
+#include <string>
+#include <vector>
 
 namespace ONNX_NAMESPACE {
 namespace inference {
 
-void handle_ptrDeleter(void* handler);
+void handle_ptrDeleter(void *handler);
 
 using LibHandlePtr = std::shared_ptr<void>;
 
 // This is thread-safe.
 class LibraryLoader {
- public:
-  static const LibraryLoader& GetInstance();
+public:
+  static const LibraryLoader &GetInstance();
   LibraryLoader();
-  LibHandlePtr LoadLibrary(const std::string& lib_name) 
-      const throw(std::runtime_error);
+  LibHandlePtr LoadLibrary(const std::string &lib_name) const
+      throw(std::runtime_error);
 
   template <class FuncT>
-  FuncT* GetFuncPointer(LibHandlePtr handle_ptr, const std::string& func_name)
-      const throw(std::runtime_error);
+  FuncT *GetFuncPointer(LibHandlePtr handle_ptr,
+                        const std::string &func_name) const
+      throw(std::runtime_error);
 
- private:
+private:
   // Non-copyable
-  LibraryLoader(LibraryLoader const&) = delete;
-  LibraryLoader& operator=(LibraryLoader const&) = delete;
+  LibraryLoader(LibraryLoader const &) = delete;
+  LibraryLoader &operator=(LibraryLoader const &) = delete;
 
-  std::string findLibrary(const std::string& lib_name) const;
+  std::string findLibrary(const std::string &lib_name) const;
 
   const std::string kLdLibraryPath = "LD_LIBRARY_PATH";
   std::vector<std::string> libPaths_;
 };
 
 template <class FuncT>
-FuncT* LibraryLoader::GetFuncPointer(
-    LibHandlePtr handle_ptr,
-    const std::string& func_name) const throw(std::runtime_error){
-  FuncT* ptr =
-      reinterpret_cast<FuncT*>(dlsym(handle_ptr.get(), func_name.c_str()));
-  char* error = dlerror();
+FuncT *LibraryLoader::GetFuncPointer(LibHandlePtr handle_ptr,
+                                     const std::string &func_name) const
+    throw(std::runtime_error) {
+  FuncT *ptr =
+      reinterpret_cast<FuncT *>(dlsym(handle_ptr.get(), func_name.c_str()));
+  char *error = dlerror();
   if (nullptr != error) {
     std::ostringstream err_msg("Warning: dlsym() find func failed: ");
     err_msg << error << ".\n";
@@ -59,5 +60,5 @@ FuncT* LibraryLoader::GetFuncPointer(
   return ptr;
 }
 
-}  // namespace inference
-}  // namespace ONNX_NAMESPACE
+} // namespace inference
+} // namespace ONNX_NAMESPACE
