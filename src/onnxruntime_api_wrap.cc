@@ -11,6 +11,7 @@
 #include <string>
 
 #include "onnxruntime_c_api.h"
+#include "utilis/Defer.h"
 
 namespace ONNX_NAMESPACE {
 namespace inference {
@@ -254,8 +255,8 @@ void OnnxApiWrapper::checkStatus(OrtStatus *status) const
     throw(std::runtime_error) {
   if (status != NULL) {
     const char *msg = pOrt_->GetErrorMessage(status);
+    Utilis::DEFER([&] { pOrt_->ReleaseStatus(status); });
     fprintf(stderr, "%s\n", msg);
-    pOrt_->ReleaseStatus(status);
     throw std::runtime_error(msg);
   }
 }
@@ -268,10 +269,13 @@ bool OnnxApiWrapper::InferModel(const ModelProto mp,
   // create execution environment
   OrtEnv *env;
   checkStatus(pOrt_->CreateEnv(ORT_LOGGING_LEVEL_WARNING, "test", &env));
+  Utilis::DEFER([&] { pOrt_->ReleaseEnv(env); });
 
   // initialize session options if needed
   OrtSessionOptions *session_options;
   checkStatus(pOrt_->CreateSessionOptions(&session_options));
+  Utilis::DEFER([&] { pOrt_->ReleaseSessionOptions(session_options); });
+
   pOrt_->SetIntraOpNumThreads(session_options, 1);
   pOrt_->SetSessionGraphOptimizationLevel(session_options, ORT_ENABLE_BASIC);
 
@@ -284,18 +288,22 @@ bool OnnxApiWrapper::InferModel(const ModelProto mp,
   OrtSession *sess;
   checkStatus(pOrt_->CreateSessionFromArray(env, mp_buff.data(), mp_buff.size(),
                                             session_options, &sess));
+  Utilis::DEFER([&] { pOrt_->ReleaseSession(sess); });
 
   OrtMemoryInfo *memory_info;
   checkStatus(pOrt_->CreateCpuMemoryInfo(OrtArenaAllocator, OrtMemTypeDefault,
                                          &memory_info));
+  Utilis::DEFER([&] { pOrt_->ReleaseMemoryInfo(memory_info); });
 
   // prepare input data and info
   auto input_num = input_names.size();
   assert(input_num == input_tensors.size());
 
+  auto ort_value_deleter = [&](OrtValue *val) { pOrt_->ReleaseValue(val); };
+
   std::vector<const char *> input_name_ptrs(input_num);
   std::vector<OrtValue *> inputs(input_num);
-
+  std::vector<std::shared_ptr<OrtValue>> inputs_guard;
   for (size_t i = 0; i < input_num; ++i) {
     input_name_ptrs[i] = input_names[i].c_str();
 
@@ -313,12 +321,14 @@ bool OnnxApiWrapper::InferModel(const ModelProto mp,
             static_cast<TensorProto_DataType>(input_tensors[i].elem_type())),
         &input));
     inputs[i] = input;
+    inputs_guard.push_back(std::shared_ptr<OrtValue>(input, ort_value_deleter));
   }
 
   // prepare output data object
   auto output_num = output_names.size();
-
   std::vector<OrtValue *> outputs(output_num);
+  std::vector<std::shared_ptr<OrtValue>> outputs_guard;
+
   output_tensors->resize(output_num);
 
   std::vector<const char *> output_name_ptrs(output_num);
@@ -332,12 +342,18 @@ bool OnnxApiWrapper::InferModel(const ModelProto mp,
                          outputs.data()));
 
   for (decltype(output_num) i = 0; i < output_num; ++i) {
+    outputs_guard.push_back(
+        std::shared_ptr<OrtValue>(outputs[i], ort_value_deleter));
+  }
+  for (decltype(output_num) i = 0; i < output_num; ++i) {
     // get tensor type and shape info
     int is_tensor;
     checkStatus(pOrt_->IsTensor(outputs[i], &is_tensor));
     assert(is_tensor);
     OrtTensorTypeAndShapeInfo *type_shape_ptr;
     checkStatus(pOrt_->GetTensorTypeAndShape(outputs[i], &type_shape_ptr));
+    Utilis::DEFER(
+        [&] { pOrt_->ReleaseTensorTypeAndShapeInfo(type_shape_ptr); });
 
     // set tensor type
     ONNXTensorElementDataType dataType;
@@ -362,22 +378,7 @@ bool OnnxApiWrapper::InferModel(const ModelProto mp,
     void *data_ptr;
     checkStatus(pOrt_->GetTensorMutableData(outputs[i], &(data_ptr)));
     SetTensorData(&output, data_ptr, data_len);
-
-    // release OrtTensorTypeAndShapeInfo object
-    pOrt_->ReleaseTensorTypeAndShapeInfo(type_shape_ptr);
   }
-
-  // release resources
-  // TODO(ATP): Use RAII theory to handle resources.
-  for (decltype(output_num) i = 0; i < output_num; ++i) {
-    pOrt_->ReleaseValue(outputs[i]);
-  }
-  for (size_t i = 0; i < input_num; ++i) {
-    pOrt_->ReleaseValue(inputs[i]);
-  }
-  pOrt_->ReleaseSession(sess);
-  pOrt_->ReleaseSessionOptions(session_options);
-  pOrt_->ReleaseEnv(env);
   return true;
 }
 

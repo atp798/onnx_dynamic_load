@@ -14,6 +14,8 @@
 #include <string>
 #include <vector>
 
+#include "utilis/NonCopyable.h"
+
 namespace ONNX_NAMESPACE {
 namespace inference {
 
@@ -22,7 +24,7 @@ void handle_ptrDeleter(void *handler);
 using LibHandlePtr = std::shared_ptr<void>;
 
 // This is thread-safe.
-class LibraryLoader {
+class LibraryLoader : Utilis::NonCopyable {
 public:
   static const LibraryLoader &GetInstance();
   LibraryLoader();
@@ -35,10 +37,6 @@ public:
       throw(std::runtime_error);
 
 private:
-  // Non-copyable
-  LibraryLoader(LibraryLoader const &) = delete;
-  LibraryLoader &operator=(LibraryLoader const &) = delete;
-
   std::string findLibrary(const std::string &lib_name) const;
 
   const std::string kLdLibraryPath = "LD_LIBRARY_PATH";

@@ -14,6 +14,7 @@
 #include "library_loader.h"
 #include "onnx/common/ir.h"
 #include "onnx/onnx_pb.h"
+#include "utilis/NonCopyable.h"
 
 struct OrtStatus;
 struct OrtApiBase;
@@ -26,7 +27,7 @@ class OnnxApiWrapper;
 using OnnxApiWrapperPtr = std::shared_ptr<OnnxApiWrapper>;
 
 // This class is non-thread-safe.
-class OnnxApiWrapper {
+class OnnxApiWrapper : Utilis::NonCopyable {
 public:
   static OnnxApiWrapperPtr GetInstance() throw(std::runtime_error);
   OnnxApiWrapper() = delete;
