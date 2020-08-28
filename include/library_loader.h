@@ -28,13 +28,11 @@ class LibraryLoader : Utilis::NonCopyable {
 public:
   static const LibraryLoader &GetInstance();
   LibraryLoader();
-  LibHandlePtr LoadLibrary(const std::string &lib_name) const
-      throw(std::runtime_error);
+  LibHandlePtr LoadLibrary(const std::string &lib_name) const;
 
   template <class FuncT>
   FuncT *GetFuncPointer(LibHandlePtr handle_ptr,
-                        const std::string &func_name) const
-      throw(std::runtime_error);
+                        const std::string &func_name) const;
 
 private:
   std::string findLibrary(const std::string &lib_name) const;
@@ -45,8 +43,7 @@ private:
 
 template <class FuncT>
 FuncT *LibraryLoader::GetFuncPointer(LibHandlePtr handle_ptr,
-                                     const std::string &func_name) const
-    throw(std::runtime_error) {
+                                     const std::string &func_name) const {
   FuncT *ptr =
       reinterpret_cast<FuncT *>(dlsym(handle_ptr.get(), func_name.c_str()));
   char *error = dlerror();

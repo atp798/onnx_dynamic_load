@@ -61,8 +61,7 @@ std::string LibraryLoader::findLibrary(const std::string &lib_name) const {
   return lib_path;
 }
 
-LibHandlePtr LibraryLoader::LoadLibrary(const std::string &lib_name) const
-    throw(std::runtime_error) {
+LibHandlePtr LibraryLoader::LoadLibrary(const std::string &lib_name) const {
   std::string lib_path = findLibrary(lib_name);
   if (lib_path.length() == 0) {
     std::ostringstream err_msg;

@@ -17,7 +17,7 @@ namespace ONNX_NAMESPACE {
 namespace inference {
 
 ONNXTensorElementDataType TensorProtoDataTypeToONNXTensorElementDataType(
-    const TensorProto_DataType elem_type) throw(std::invalid_argument) {
+    const TensorProto_DataType elem_type) {
   ONNXTensorElementDataType type;
   switch (elem_type) {
   case TensorProto_DataType_UNDEFINED:
@@ -78,7 +78,7 @@ ONNXTensorElementDataType TensorProtoDataTypeToONNXTensorElementDataType(
 }
 
 TensorProto_DataType ONNXTensorElementDataTypeToTensorProtoDataType(
-    const ONNXTensorElementDataType elem_type) throw(std::invalid_argument) {
+    const ONNXTensorElementDataType elem_type) {
   TensorProto_DataType type;
   switch (elem_type) {
   case ONNX_TENSOR_ELEMENT_DATA_TYPE_UNDEFINED:
@@ -146,8 +146,7 @@ TensorProto_DataType ONNXTensorElementDataTypeToTensorProtoDataType(
          length * sizeof(std::remove_reference<decltype(                       \
                              tensor->data_type())>::type::value_type))
 
-void SetTensorData(Tensor *tensor, void *data_ptr,
-                   size_t length) throw(std::invalid_argument) {
+void SetTensorData(Tensor *tensor, void *data_ptr, size_t length) {
   switch (tensor->elem_type()) {
   case ONNX_NAMESPACE::TensorProto_DataType_FLOAT: {
     COPY_TENSOR_DATA(tensor, data_ptr, length, floats);
@@ -179,7 +178,7 @@ void SetTensorData(Tensor *tensor, void *data_ptr,
 }
 
 bool GetONNXTensorData(const Tensor &tensor, const void **data_ptr,
-                       size_t *data_len) throw(std::invalid_argument) {
+                       size_t *data_len) {
   *data_len = tensor.size_from_dim(0);
   if (tensor.is_raw_data()) {
     *data_ptr = tensor.raw().c_str();
@@ -229,7 +228,7 @@ const std::string
     OnnxApiWrapper::kOnnxruntimeLibName("onnxruntime_pybind11_state.so");
 const std::string OnnxApiWrapper::kOrtGetApiBaseName("OrtGetApiBase");
 
-OnnxApiWrapperPtr OnnxApiWrapper::GetInstance() throw(std::runtime_error) {
+OnnxApiWrapperPtr OnnxApiWrapper::GetInstance() {
   // TODO(ATP): Here we don't use DCLP for the reason that,
   // 1. The cost of lock is acceptable, for this func is not called often.
   // 2. We don't use static member pattern to save the memory which shared
@@ -251,8 +250,7 @@ OnnxApiWrapperPtr OnnxApiWrapper::GetInstance() throw(std::runtime_error) {
   return std::move(ret);
 }
 
-void OnnxApiWrapper::checkStatus(OrtStatus *status) const
-    throw(std::runtime_error) {
+void OnnxApiWrapper::checkStatus(OrtStatus *status) const {
   if (status != NULL) {
     const char *msg = pOrt_->GetErrorMessage(status);
     Utilis::DEFER([&] { pOrt_->ReleaseStatus(status); });

@@ -29,7 +29,7 @@ using OnnxApiWrapperPtr = std::shared_ptr<OnnxApiWrapper>;
 // This class is non-thread-safe.
 class OnnxApiWrapper : Utilis::NonCopyable {
 public:
-  static OnnxApiWrapperPtr GetInstance() throw(std::runtime_error);
+  static OnnxApiWrapperPtr GetInstance();
   OnnxApiWrapper() = delete;
   OnnxApiWrapper(LibHandlePtr lib_handle_sptr, const OrtApi *ort_ptr) noexcept
       : spLibHandle_(lib_handle_sptr), pOrt_(ort_ptr) {}
@@ -45,7 +45,7 @@ private:
   OnnxApiWrapper(const OnnxApiWrapper &) = delete;
   OnnxApiWrapper &operator=(const OnnxApiWrapper &) = delete;
 
-  void checkStatus(OrtStatus *status) const throw(std::runtime_error);
+  void checkStatus(OrtStatus *status) const;
 
   static std::weak_ptr<OnnxApiWrapper> wpWrapper_;
   static std::mutex muxWrapper_;
