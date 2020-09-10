@@ -221,21 +221,59 @@ bool GetONNXTensorData(const Tensor &tensor, const void **data_ptr,
   return true;
 }
 
+OnnxApiWrapper::~OnnxApiWrapper() {
+  pOrt_->ReleaseEnv(pEnv_);
+  printf("deconst of api wrapper:%p, use count:%d\n", this,
+         spLibHandle_.use_count());
+}
+
+#if __cplusplus >= 202002L
+std::atomic<std::weak_ptr<OnnxApiWrapper>> OnnxApiWrapper::awpWrapper_;
+#else
 std::weak_ptr<OnnxApiWrapper> OnnxApiWrapper::wpWrapper_;
+#endif
+
 std::mutex OnnxApiWrapper::muxWrapper_;
 
 const std::string
     OnnxApiWrapper::kOnnxruntimeLibName("onnxruntime_pybind11_state.so");
 const std::string OnnxApiWrapper::kOrtGetApiBaseName("OrtGetApiBase");
 
+#if __cplusplus >= 202002L
+// For more information about correct DCLP:
+// https://en.cppreference.com/w/cpp/memory/weak_ptr/atomic2
+// https://preshing.com/20130930/double-checked-locking-is-fixed-in-cpp11/
 OnnxApiWrapperPtr OnnxApiWrapper::GetInstance() {
-  // TODO(ATP): Here we don't use DCLP for the reason that,
+  auto wpWrapper = awpWrapper_.load(std::memory_order_acquire);
+  OnnxApiWrapperPtr ret = wpWrapper.lock();
+  if (ret == nullptr) {
+    std::lock_guard<std::mutex> guard(muxWrapper_);
+    wpWrapper = awpWrapper_.load();
+    ret = wpWrapper.lock();
+    if (ret == nullptr) {
+      const LibraryLoader &loader = LibraryLoader::GetInstance();
+      auto lib_handle_sptr = loader.LoadLibrary(kOnnxruntimeLibName);
+      OrtGetApiBasePtr *func_api_base = loader.GetFuncPointer<OrtGetApiBasePtr>(
+          lib_handle_sptr, kOrtGetApiBaseName);
+      if (nullptr == func_api_base) {
+        throw std::runtime_error("Onnxruntime api get failed!");
+      }
+      const OrtApi *p_ort = func_api_base()->GetApi(ORT_API_VERSION);
+      ret = std::make_shared<OnnxApiWrapper>(lib_handle_sptr, p_ort);
+      awpWrapper_.store(ret, std::memory_order_release);
+    }
+  }
+  return std::move(ret);
+}
+#else
+OnnxApiWrapperPtr OnnxApiWrapper::GetInstance() {
+  // This singleton is also acceptable compared with DCLP
   // 1. The cost of lock is acceptable, for this func is not called often.
   // 2. We don't use static member pattern to save the memory which shared
   //      library takes.
   std::lock_guard<std::mutex> guard(muxWrapper_);
   OnnxApiWrapperPtr ret = wpWrapper_.lock();
-  if (ret == nullptr) {
+  if (!ret) {
     const LibraryLoader &loader = LibraryLoader::GetInstance();
     auto lib_handle_sptr = loader.LoadLibrary(kOnnxruntimeLibName);
     OrtGetApiBasePtr *func_api_base = loader.GetFuncPointer<OrtGetApiBasePtr>(
@@ -248,6 +286,13 @@ OnnxApiWrapperPtr OnnxApiWrapper::GetInstance() {
     wpWrapper_ = ret;
   }
   return std::move(ret);
+}
+#endif
+
+OnnxApiWrapper::OnnxApiWrapper(LibHandlePtr lib_handle_sptr,
+                               const OrtApi *ort_ptr)
+    : spLibHandle_(lib_handle_sptr), pOrt_(ort_ptr) {
+  checkStatus(pOrt_->CreateEnv(ORT_LOGGING_LEVEL_WARNING, "wrapper", &pEnv_));
 }
 
 void OnnxApiWrapper::checkStatus(OrtStatus *status) const {
@@ -264,10 +309,6 @@ bool OnnxApiWrapper::InferModel(const ModelProto mp,
                                 const std::vector<Tensor> &input_tensors,
                                 const std::vector<std::string> &output_names,
                                 std::vector<Tensor> *output_tensors) {
-  // create execution environment
-  OrtEnv *env;
-  checkStatus(pOrt_->CreateEnv(ORT_LOGGING_LEVEL_WARNING, "test", &env));
-  Utilis::DEFER([&] { pOrt_->ReleaseEnv(env); });
 
   // initialize session options if needed
   OrtSessionOptions *session_options;
@@ -284,8 +325,8 @@ bool OnnxApiWrapper::InferModel(const ModelProto mp,
 
   // create session
   OrtSession *sess;
-  checkStatus(pOrt_->CreateSessionFromArray(env, mp_buff.data(), mp_buff.size(),
-                                            session_options, &sess));
+  checkStatus(pOrt_->CreateSessionFromArray(
+      pEnv_, mp_buff.data(), mp_buff.size(), session_options, &sess));
   Utilis::DEFER([&] { pOrt_->ReleaseSession(sess); });
 
   OrtMemoryInfo *memory_info;

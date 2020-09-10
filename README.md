@@ -6,6 +6,7 @@ This is a wrapper used to load onnxruntime dynamically to inference model.
 ## Feature
 - No c interface exposed.
 - Library loader is thread-safe.
+- OnnxApiWrapper is thread-safe and support multi-thread model infer.
 - Dynamic library load.
 - Library closed once unneeded, no more resources occupation. 
 

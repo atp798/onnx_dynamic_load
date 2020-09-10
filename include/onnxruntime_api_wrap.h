@@ -19,6 +19,7 @@
 struct OrtStatus;
 struct OrtApiBase;
 struct OrtApi;
+struct OrtEnv;
 
 namespace ONNX_NAMESPACE {
 namespace inference {
@@ -26,13 +27,12 @@ namespace inference {
 class OnnxApiWrapper;
 using OnnxApiWrapperPtr = std::shared_ptr<OnnxApiWrapper>;
 
-// This class is non-thread-safe.
+// This class is thread-safe.
 class OnnxApiWrapper : Utilis::NonCopyable {
 public:
   static OnnxApiWrapperPtr GetInstance();
   OnnxApiWrapper() = delete;
-  OnnxApiWrapper(LibHandlePtr lib_handle_sptr, const OrtApi *ort_ptr) noexcept
-      : spLibHandle_(lib_handle_sptr), pOrt_(ort_ptr) {}
+  OnnxApiWrapper(LibHandlePtr lib_handle_sptr, const OrtApi *ort_ptr);
 
   bool InferModel(const ModelProto mp,
                   const std::vector<std::string> &input_names,
@@ -40,14 +40,19 @@ public:
                   const std::vector<std::string> &output_names,
                   std::vector<Tensor> *output_tensors);
 
+  ~OnnxApiWrapper();
+
 private:
   // Non-copyable
   OnnxApiWrapper(const OnnxApiWrapper &) = delete;
   OnnxApiWrapper &operator=(const OnnxApiWrapper &) = delete;
 
   void checkStatus(OrtStatus *status) const;
-
+#if __cplusplus >= 202002L
+  static std::atomic<std::weak_ptr<OnnxApiWrapper>> awpWrapper_;
+#else
   static std::weak_ptr<OnnxApiWrapper> wpWrapper_;
+#endif
   static std::mutex muxWrapper_;
 
   static const std::string kOnnxruntimeLibName;
@@ -59,6 +64,7 @@ private:
   // The lifetime of pOrt_ is as long as the onnxruntime library in memory.
   // That means same as spLibHandle_, and same as the class instance.
   const OrtApi *const pOrt_;
+  OrtEnv *pEnv_;
 };
 
 } // namespace inference
